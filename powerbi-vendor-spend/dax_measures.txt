@@ -1,0 +1,71 @@
+DAX Measures — Vendor Spend Model
+==================================
+
+Paste these into a new measure in Power BI Desktop (Model view > New
+Measure, or Report view > Table tools > New Measure). Create them on
+the fact_po_lines table unless noted otherwise.
+
+Relationships needed first (Model view):
+  fact_po_lines[vendor_id]   -> dim_vendor[vendor_id]      (many-to-one)
+  fact_po_lines[material_id] -> dim_material[material_id]  (many-to-one)
+  fact_po_lines[date]        -> dim_date[date]             (many-to-one)
+  Mark dim_date as a Date Table (Model view > right-click dim_date >
+  "Mark as date table" > pick the `date` column).
+
+
+-- Total Spend
+Total Spend =
+SUM ( fact_po_lines[net_value] )
+
+
+-- Total PO Line Count
+PO Line Count =
+COUNTROWS ( fact_po_lines )
+
+
+-- Average Line Value
+Avg Line Value =
+DIVIDE ( [Total Spend], [PO Line Count] )
+
+
+-- Distinct Vendor Count (with active spend)
+Active Vendors =
+DISTINCTCOUNT ( fact_po_lines[vendor_id] )
+
+
+-- Month-over-Month Spend Change (%)
+-- Requires dim_date marked as a date table
+MoM Spend Change % =
+VAR CurrentSpend = [Total Spend]
+VAR PriorMonthSpend =
+    CALCULATE (
+        [Total Spend],
+        DATEADD ( dim_date[date], -1, MONTH )
+    )
+RETURN
+    DIVIDE ( CurrentSpend - PriorMonthSpend, PriorMonthSpend )
+
+
+-- Year-to-Date Spend
+Spend YTD =
+TOTALYTD ( [Total Spend], dim_date[date] )
+
+
+-- Top Vendor by Spend (for a KPI card)
+Top Vendor =
+CALCULATE (
+    VALUES ( dim_vendor[vendor_name] ),
+    TOPN ( 1, ALL ( dim_vendor[vendor_name] ), [Total Spend], DESC )
+)
+
+
+-- % of Total Spend by Vendor (for a table with a running % column)
+% of Total Spend =
+DIVIDE ( [Total Spend], CALCULATE ( [Total Spend], ALL ( dim_vendor ) ) )
+
+
+-- Spend Concentration Flag (example of a business-rule measure)
+-- Flags vendors representing more than 25% of total spend, useful for
+-- surfacing vendor concentration risk in a report.
+High Concentration Vendor =
+IF ( [% of Total Spend] > 0.25, "Yes", "No" )
